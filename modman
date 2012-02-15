@@ -21,7 +21,7 @@
 #    - The following common utilities must be locatable in your $PATH
 #       grep (POSIX), find, ln, cp, basename, dirname, readlink
 
-version="1.4.6"
+version="1.4.7"
 script=${0##*/}
 usage="\
 Module Manager (v$version)
@@ -45,6 +45,7 @@ Module Commands:
 ------------------------------
   checkout <src>     checkout a new modman compatible module using subversion
   clone <src>        checkout a new modman compatible module using git clone
+  hgclone <src>      checkout a new modman compatible module using hg clone
   update             update module using the appropriate SCM
   deploy             deploy an existing module (SCM not required or used)
   deploy --copy      deploy with hardlinks instead of symlinks (not recommended)
@@ -55,11 +56,11 @@ Module Commands:
 tutorial="\
 Deploying a modman module:
 ------------------------------
-The 'checkout' and 'clone' commands are used to checkout new modules from a
-repository (subversion and git, respectively). These commands support additional
-arguments which will be passed to the 'svn checkout' and 'git clone' commands.
+The 'checkout', 'clone' and 'hgclone' commands are used to checkout new modules from a
+repository (subversion, git and mecurial respectively). These commands support additional
+arguments which will be passed to the 'svn checkout', 'git clone' and 'hg clone' commands.
 This allows you to for example specify a --username (svn) or a --branch (git).
-See 'svn help checkout' and 'git help clone' for a full list of options.
+See 'svn help checkout', 'git help clone' and 'hg help clone' for a full list of options.
 Both svn:externals and git submodules will be automatically included.
 
 By default, if a module being checked out contains symlink mappings that
@@ -107,7 +108,7 @@ and could therefore be imported by any other module or checked out by itself.
 
 Shell commands:
 ------------------------------
-Actions to be taken any time one of the checkout, clone, update, deploy,
+Actions to be taken any time one of the checkout, clone, hgclone, update, deploy,
 update-all or repair commands are used can be defined with the @shell
 directive. The rest of the line after @shell will be piped to a new bash
 shell with the working directory being the module's root. The following
@@ -538,6 +539,8 @@ elif [ "$1" = "update-all" ]; then
       fi
     elif [ -d .git ]; then
       git pull && git submodule update --init --recursive && success=1
+    elif [ -d .hg ]; then
+      hg pull && success=1
     else
       success=1
     fi
@@ -596,7 +599,7 @@ fi
 # Handle all other module-specific commands
 #############################################
 
-REGEX_ACTION='(update|checkout|clone|deploy|\s+)'
+REGEX_ACTION='(update|checkout|clone|hgclone|deploy|\s+)'
 
 # Action is first argument, but should be supported as second for backwards compatibility
 action=''
@@ -645,6 +648,8 @@ case "$action" in
       svn update $@ && success=1
     elif [ -d .git ]; then
       git pull $@ && git submodule update --init --recursive && success=1
+    elif [ -d .hg ]; then
+      hg pull $@ && success=1
     fi
     [ $success -eq 1 ] || { echo_b "Failed to update working copy of '$module'."; exit 1; }
 
@@ -655,7 +660,7 @@ case "$action" in
     fi
     ;;
 
-  checkout|clone)
+  checkout|clone|hgclone)
     FORCE=1
     cd $mm
     if [[ "$module" =~ $REGEX_ACTION ]]; then
@@ -675,8 +680,10 @@ case "$action" in
     success=0
     if [ "$action" = "checkout" ]; then
       svn checkout $@ "$module" && success=1
-    else
+    elif [ "$action" = "clone" ]; then
       git clone --recursive $@ "$module" && success=1
+    else
+      hg clone $@ "$module" && success=1
     fi
 
     if
