@@ -599,7 +599,7 @@ fi
 # Handle all other module-specific commands
 #############################################
 
-REGEX_ACTION='(update|checkout|clone|hgclone|deploy|\s+)'
+REGEX_ACTION='(update|checkout|clone|hgclone|deploy)'
 
 # Action is first argument, but should be supported as second for backwards compatibility
 action=''
