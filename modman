@@ -21,7 +21,7 @@
 #    - The following common utilities must be locatable in your $PATH
 #       grep (POSIX), find, ln, cp, basename, dirname, readlink
 
-version="1.4.7"
+version="1.4.8"
 script=${0##*/}
 usage="\
 Module Manager (v$version)
@@ -46,6 +46,7 @@ Module Commands:
   checkout <src>     checkout a new modman compatible module using subversion
   clone <src>        checkout a new modman compatible module using git clone
   hgclone <src>      checkout a new modman compatible module using hg clone
+  import <src>       imports a new module from a directory and creates symlinks
   update             update module using the appropriate SCM
   deploy             deploy an existing module (SCM not required or used)
   deploy --copy      deploy with hardlinks instead of symlinks (not recommended)
@@ -541,6 +542,14 @@ elif [ "$1" = "update-all" ]; then
       git pull && git submodule update --init --recursive && success=1
     elif [ -d .hg ]; then
       hg pull && success=1
+    elif [ -r .modman_import ]; then
+      module_path=`cat .modman_import`
+
+      #force copy modman file from src directory to module directory
+      cp -f "$module_path/modman" .
+
+      #create links to module directory
+      create_links "$module_path/modman" . && success=1
     else
       success=1
     fi
@@ -599,7 +608,7 @@ fi
 # Handle all other module-specific commands
 #############################################
 
-REGEX_ACTION='(update|checkout|clone|hgclone|deploy)'
+REGEX_ACTION='(update|checkout|clone|hgclone|deploy|import)'
 
 # Action is first argument, but should be supported as second for backwards compatibility
 action=''
@@ -650,6 +659,18 @@ case "$action" in
       git pull $@ && git submodule update --init --recursive && success=1
     elif [ -d .hg ]; then
       hg pull $@ && success=1
+    else
+      if ! [ -r ".modman_import" ]; then
+        echo_b "ERROR: $module does not contain a \".modman_import\" file."
+        exit;
+      fi
+
+      #force copy modman file from src directory to module directory
+      module_path=`cat .modman_import`
+      cp -f "$module_path/modman" "$module"
+
+      #create links to module directory
+      create_links "$module_path/modman" ".modman/$module/" && success=1
     fi
     [ $success -eq 1 ] || { echo_b "Failed to update working copy of '$module'."; exit 1; }
 
@@ -660,7 +681,7 @@ case "$action" in
     fi
     ;;
 
-  checkout|clone|hgclone)
+  checkout|clone|hgclone|import)
     FORCE=1
     cd $mm
     if [[ "$module" =~ $REGEX_ACTION ]]; then
@@ -682,8 +703,28 @@ case "$action" in
       svn checkout $@ "$module" && success=1
     elif [ "$action" = "clone" ]; then
       git clone --recursive $@ "$module" && success=1
-    else
+    elif [ "$action" = "hgclone" ]; then
       hg clone $@ "$module" && success=1
+    elif [ "$action" = "import" ]; then
+      #check if src path contains a modman file
+      #TODO: Check if $@ contains a leading /
+      if ! [ -r "$@modman" ]; then
+        echo_b "ERROR: $@ does not contain a \"modman\" module description file."
+        exit;
+      fi
+
+      #create module directory
+      mkdir "$module" || { echo "Could not create module directory" && exit 1; }
+
+      #copy modman file from src directory to module directory
+      cp "$@/modman" "$module"
+
+      #create links to module directory
+      create_links "$@/modman" ".modman/$module/"
+
+      #create .module_import file with path to src
+      echo $@ > "$module/.modman_import"
+      success=1
     fi
 
     if
